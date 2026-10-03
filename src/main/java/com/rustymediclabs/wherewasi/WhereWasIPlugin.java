@@ -31,6 +31,9 @@ public class WhereWasIPlugin extends Plugin
 	static final String NEXT_STEPS = "nextSteps";
 	static final String ACTIVITY = "currentActivityV1";
 	static final String SUPPLIES = "rememberSuppliesV1";
+	static final String DONE = "completedStepsV1";
+	static final String UPDATED = "journalUpdatedV1";
+	private static final String HISTORY = "sessionHistoryV1";
 	private static final String RECAP_KEY = "sessionRecapV1";
 	private static final long CHECKPOINT_MILLIS = 30_000;
 
@@ -50,6 +53,8 @@ public class WhereWasIPlugin extends Plugin
 	private volatile long session;
 	private int[] baselineXp;
 	private long lastCheckpoint;
+	private long sessionId;
+	private volatile SessionHistory history = SessionHistory.decode(null);
 
 	@Provides
 	WhereWasIConfig provideConfig(ConfigManager manager)
@@ -69,9 +74,10 @@ public class WhereWasIPlugin extends Plugin
 				// Explicit profile keeps post-logout edits attached to the correct character.
 				{
 					configManager.setConfiguration(WhereWasIConfig.GROUP, profile, key, text);
-					if (Objects.equals(profile, activeProfile) && NEXT_STEPS.equals(key))
+					configManager.setConfiguration(WhereWasIConfig.GROUP, profile, UPDATED, System.currentTimeMillis());
+					if (Objects.equals(profile, activeProfile) && (NEXT_STEPS.equals(key) || DONE.equals(key)))
 					{
-						reminderText = shortReminder(text);
+						updateReminder(profile);
 					}
 				});
 			navigation = NavigationButton.builder().tooltip("Where Was I?")
@@ -109,6 +115,7 @@ public class WhereWasIPlugin extends Plugin
 		if (event.getGameState() != GameState.LOGIN_SCREEN || activeProfile == null) { return; }
 		saveRecap();
 		SessionRecap ended = currentRecap;
+		SessionHistory endedHistory = history;
 		String profile = activeProfile;
 		activeProfile = null;
 		currentRecap = null;
@@ -120,6 +127,7 @@ public class WhereWasIPlugin extends Plugin
 		{
 			if (!running || panel != target || target == null || session != endedSession) { return; }
 			target.showSessionEnded(profile, ended, remind);
+			target.showHistory(endedHistory);
 			if (remind && navigation != null) { clientToolbar.openPanel(navigation); }
 		});
 		// World hops and loading screens deliberately keep the same session.
@@ -152,12 +160,16 @@ public class WhereWasIPlugin extends Plugin
 			saveRecap();
 			activeProfile = profile;
 			baselineXp = experience.clone();
+			sessionId = System.currentTimeMillis();
+			history = SessionHistory.decode(read(profile, HISTORY));
 			currentRecap = null;
 			lastCheckpoint = 0;
 			long accountSession = ++session;
 			String activity = read(profile, ACTIVITY);
 			String steps = read(profile, NEXT_STEPS);
-			reminderText = shortReminder(steps);
+			updateReminder(profile);
+			String completed = read(profile, DONE);
+			long updated = updatedAt(read(profile, UPDATED));
 			String supplies = read(profile, SUPPLIES);
 			SessionRecap saved = SessionRecap.decode(read(profile, RECAP_KEY));
 			if (saved == null)
@@ -165,13 +177,21 @@ public class WhereWasIPlugin extends Plugin
 				LastVisit legacy = LastVisit.decode(read(profile, "lastVisitV1"));
 				if (legacy != null) { saved = SessionRecap.legacy(legacy.savedAt); }
 			}
+			if (history.entries().isEmpty() && saved != null && saved.tracked)
+			{
+				history = history.with(saved.endedAt, saved);
+			}
+			SessionHistory previousHistory = history;
+			boolean openOnLogin = config.loginRecap();
 			SessionRecap previous = saved;
 			String name = player.getName();
 			SwingUtilities.invokeLater(() ->
 			{
 				if (running && panel == target && session == accountSession)
 				{
-					target.showAccount(profile, name, activity, steps, supplies, previous);
+					target.showAccount(profile, name, activity, steps, supplies, previous, completed, updated);
+					target.showHistory(previousHistory);
+					if (openOnLogin && navigation != null) { clientToolbar.openPanel(navigation); }
 				}
 			});
 			if (config.welcomeMessage())
@@ -186,6 +206,18 @@ public class WhereWasIPlugin extends Plugin
 			saveRecap();
 			lastCheckpoint = currentRecap.endedAt;
 		}
+	}
+
+	private void updateReminder(String profile)
+	{
+		reminderText = shortReminder(JournalChecklist.next(read(profile, NEXT_STEPS),
+			JournalChecklist.decode(read(profile, DONE))));
+	}
+
+	static long updatedAt(String value)
+	{
+		try { return value == null ? 0 : Math.max(0, Long.parseLong(value)); }
+		catch (NumberFormatException ignored) { return 0; }
 	}
 
 	String getReminderText()
@@ -212,6 +244,8 @@ public class WhereWasIPlugin extends Plugin
 		if (profile != null && recap != null)
 		{
 			configManager.setConfiguration(WhereWasIConfig.GROUP, profile, RECAP_KEY, recap.encode());
+			history = history.with(sessionId, recap);
+			configManager.setConfiguration(WhereWasIConfig.GROUP, profile, HISTORY, history.encode());
 		}
 	}
 }

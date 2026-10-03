@@ -38,4 +38,14 @@ public interface WhereWasIConfig extends Config
 	{
 		return true;
 	}
+
+	@ConfigItem(
+		keyName = "loginRecap",
+		name = "Open journal on login",
+		description = "Open your saved plan when you log in; you can close the sidebar whenever you like"
+	)
+	default boolean loginRecap()
+	{
+		return true;
+	}
 }

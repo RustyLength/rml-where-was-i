@@ -11,12 +11,19 @@ import java.awt.Graphics2D;
 import java.awt.RenderingHints;
 import java.awt.image.BufferedImage;
 import java.time.Instant;
+import java.time.LocalDate;
+import java.time.temporal.ChronoUnit;
+import java.util.Set;
+import java.util.HashSet;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.Locale;
 import javax.swing.BorderFactory;
 import javax.swing.ImageIcon;
 import javax.swing.JLabel;
+import javax.swing.JButton;
+import javax.swing.JCheckBox;
+import javax.swing.BoxLayout;
 import javax.swing.JPanel;
 import javax.swing.JScrollPane;
 import javax.swing.JTextArea;
@@ -37,6 +44,11 @@ final class WhereWasIPanel extends PluginPanel
 	private final JTextArea recap = textArea(3);
 	private final JTextArea prompt = textArea(2);
 	private final JLabel status = new JLabel();
+	private final JPanel checklist = new JPanel();
+	private final JTextArea historyText = textArea(12);
+	private final JScrollPane historyScroll = editor(historyText, 180);
+	private final JButton historyToggle = new JButton("Show session history");
+	private Set<String> completed = new HashSet<>();
 	private final JournalWriter writer;
 	private String profile;
 	private boolean loading;
@@ -65,7 +77,18 @@ final class WhereWasIPanel extends PluginPanel
 		prompt.setForeground(GOLD);
 		addRow(prompt, 2);
 		addRow(section("I WAS WORKING ON", editor(activity, 65)), 3);
-		addRow(section("MY NEXT STEPS", editor(steps, 125)), 4);
+		JPanel nextSteps = new JPanel(new BorderLayout(0, 8));
+		nextSteps.setOpaque(false);
+		nextSteps.add(editor(steps, 100), BorderLayout.NORTH);
+		checklist.setLayout(new BoxLayout(checklist, BoxLayout.Y_AXIS));
+		checklist.setOpaque(false);
+		nextSteps.add(checklist, BorderLayout.CENTER);
+		JTextArea hint = textArea(1);
+		hint.setEditable(false);
+		hint.setText("One step per line. Tick it off below.");
+		hint.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 10));
+		nextSteps.add(hint, BorderLayout.SOUTH);
+		addRow(section("MY NEXT STEPS", nextSteps), 4);
 		addRow(section("DON'T FORGET", editor(supplies, 65)), 5);
 		status.setForeground(GOLD);
 		status.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 11));
@@ -78,7 +101,23 @@ final class WhereWasIPanel extends PluginPanel
 		credit.setForeground(new Color(151, 137, 115));
 		credit.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 10));
 		credit.setText("Designed by Rusty Medic Labs");
-		addRow(credit, 8);
+		JPanel historyPanel = new JPanel(new BorderLayout(0, 8));
+		historyPanel.setOpaque(false);
+		historyText.setEditable(false);
+		historyScroll.setVisible(false);
+		historyToggle.setName("sessionHistoryToggle");
+		historyToggle.setForeground(GOLD);
+		historyToggle.addActionListener(event ->
+		{
+			boolean show = !historyScroll.isVisible();
+			historyScroll.setVisible(show);
+			historyToggle.setText(show ? "Hide session history" : "Show session history");
+			revalidate();
+		});
+		historyPanel.add(historyToggle, BorderLayout.NORTH);
+		historyPanel.add(historyScroll, BorderLayout.CENTER);
+		addRow(historyPanel, 8);
+		addRow(credit, 9);
 		listen(activity, WhereWasIPlugin.ACTIVITY);
 		listen(steps, WhereWasIPlugin.NEXT_STEPS);
 		listen(supplies, WhereWasIPlugin.SUPPLIES);
@@ -107,7 +146,8 @@ final class WhereWasIPanel extends PluginPanel
 				if (!loading && profile != null)
 				{
 					writer.save(profile, key, text.getText());
-					status.setText("Saved for this character");
+					showUpdated(System.currentTimeMillis());
+					if (WhereWasIPlugin.NEXT_STEPS.equals(key)) { rebuildChecklist(); }
 				}
 			}
 		});
@@ -128,15 +168,23 @@ final class WhereWasIPanel extends PluginPanel
 	void showAccount(String profile, String name, String activityText, String stepsText,
 		String suppliesText, SessionRecap previous)
 	{
+		showAccount(profile, name, activityText, stepsText, suppliesText, previous, null, 0);
+	}
+
+	void showAccount(String profile, String name, String activityText, String stepsText,
+		String suppliesText, SessionRecap previous, String done, long updated)
+	{
 		loading = true;
 		this.profile = profile;
+		completed = JournalChecklist.decode(done);
 		account.setText(name);
 		load(activity, activityText);
 		load(steps, stepsText);
 		load(supplies, suppliesText);
 		prompt.setText("Pick up where you left off. Your journal saves as you type.");
 		showRecap(previous);
-		status.setText("Journal ready");
+		showUpdated(updated);
+		rebuildChecklist();
 		loading = false;
 	}
 
@@ -160,6 +208,9 @@ final class WhereWasIPanel extends PluginPanel
 	{
 		loading = true;
 		profile = null;
+		completed.clear();
+		checklist.removeAll();
+		showHistory(SessionHistory.decode(null));
 		account.setText("Log in to load your character");
 		for (JTextArea text : new JTextArea[]{activity, steps, supplies})
 		{
@@ -172,6 +223,66 @@ final class WhereWasIPanel extends PluginPanel
 		loading = false;
 	}
 
+	private void rebuildChecklist()
+	{
+		checklist.removeAll();
+		for (JournalChecklist.Task task : JournalChecklist.tasks(steps.getText()))
+		{
+			JPanel row = new JPanel(new BorderLayout(5, 0));
+			row.setOpaque(false);
+			JCheckBox check = new JCheckBox();
+			check.setName(task.id);
+			check.setOpaque(false);
+			check.setSelected(completed.contains(task.id));
+			JTextArea title = textArea(1);
+			title.setEditable(false);
+			title.setText(task.text);
+			title.setForeground(check.isSelected() ? new Color(151, 137, 115) : GOLD);
+			check.addActionListener(event ->
+			{
+				if (profile == null || loading) { return; }
+				if (check.isSelected()) { completed.add(task.id); }
+				else { completed.remove(task.id); }
+				writer.save(profile, WhereWasIPlugin.DONE, JournalChecklist.encode(completed));
+				title.setForeground(check.isSelected() ? new Color(151, 137, 115) : GOLD);
+				showUpdated(System.currentTimeMillis());
+			});
+			row.add(check, BorderLayout.WEST);
+			row.add(title, BorderLayout.CENTER);
+			checklist.add(row);
+		}
+		revalidate();
+		repaint();
+	}
+
+	void showHistory(SessionHistory history)
+	{
+		StringBuilder text = new StringBuilder();
+		for (SessionHistory.Entry entry : history.entries())
+		{
+			if (text.length() > 0) { text.append("\n\n"); }
+			text.append(recapText(entry.recap));
+		}
+		historyText.setText(text.length() == 0 ? "Your saved sessions will appear here (up to 20)." : text.toString());
+		historyText.setCaretPosition(0);
+	}
+
+	private void showUpdated(long time)
+	{
+		status.setText(updatedLabel(time, System.currentTimeMillis()));
+	}
+
+	static String updatedLabel(long time, long now)
+	{
+		if (time <= 0) { return "Date recorded after your next edit"; }
+		LocalDate date = Instant.ofEpochMilli(time).atZone(ZoneId.systemDefault()).toLocalDate();
+		LocalDate today = Instant.ofEpochMilli(now).atZone(ZoneId.systemDefault()).toLocalDate();
+		long days = Math.max(0, ChronoUnit.DAYS.between(date, today));
+		if (days == 0) { return "Updated today, " + DateTimeFormatter.ofPattern("HH:mm").withZone(ZoneId.systemDefault())
+			.format(Instant.ofEpochMilli(time)); }
+		return "Updated " + days + (days == 1 ? " day ago" : " days ago");
+	}
+
 	private void showRecap(SessionRecap previous)
 	{
 		if (previous == null)
@@ -179,6 +290,11 @@ final class WhereWasIPanel extends PluginPanel
 			recap.setText("Your first session recap will appear after you log out.");
 			return;
 		}
+		recap.setText(recapText(previous));
+	}
+
+	private static String recapText(SessionRecap previous)
+	{
 		StringBuilder text = new StringBuilder(TIME.format(Instant.ofEpochMilli(previous.endedAt)));
 		if (!previous.tracked) { text.append("\nXP tracking starts with this update."); }
 		else if (previous.gains.isEmpty()) { text.append("\nNo XP gains recorded."); }
@@ -188,7 +304,7 @@ final class WhereWasIPanel extends PluginPanel
 				.forEach(entry -> text.append("\n").append(entry.getKey().getName()).append(": +")
 					.append(String.format(Locale.UK, "%,d", entry.getValue())).append(" XP"));
 		}
-		recap.setText(text.toString());
+		return text.toString();
 	}
 
 	interface JournalWriter

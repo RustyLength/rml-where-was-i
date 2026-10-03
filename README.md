@@ -4,9 +4,15 @@ An account-specific adventure journal for RuneLite, designed by Rusty Medic Labs
 
 Leave yourself three reminders: **I was working on**, **My next steps**, and **Don't forget** (supplies, gear, or anything else). Existing next-step notes are preserved, and each RuneScape character has its own journal.
 
-A small **on-screen reminder** shows your next step even when the sidebar is closed. Hold **Alt** and drag it using RuneLite's standard overlay controls. Turn off **On-screen journal reminder** in plugin settings to hide it.
+Write one next step per line, then use the checkboxes below the editor to tick them off. The original note text stays intact; each character has its own completion state. Editing a task makes that changed task unfinished.
+
+A small **on-screen reminder** shows your first unfinished step even when the sidebar is closed. Hold **Alt** and drag it using RuneLite's standard overlay controls. Turn off **On-screen journal reminder** in plugin settings to hide it.
 
 After normal logout, **Logout journal reminder** opens the journal with a gentle prompt. Logout is never blocked or delayed. You can still edit the character's journal on the login screen; the next login loads the appropriate character's saved notes. Turn off the logout setting to stop automatically opening the sidebar.
+
+**Open journal on login** shows your plan when you return, and can be disabled in settings. The update label records when you last edited a reminder or ticked a task; older notes get a date after their first edit.
+
+**Session history** keeps the latest 20 session recaps per character behind a show/hide button. Checkpoints update the same session without creating duplicate entries.
 
 **Last session** shows XP gained by skill while the plugin was enabled. World hops keep the same session; disabling and enabling the plugin starts another session. XP is checkpointed every 30 seconds and saved on logout and normal client close. Force-closing RuneLite may lose recent changes. The old saved-location timestamp is retained for the first recap; the map preview and pin have been removed.
 
@@ -33,3 +39,5 @@ On Linux/macOS use `./gradlew run`. For Jagex Accounts, follow [RuneLite's devel
 6. Close and relaunch normally to check persistence and the previous session recap.
 
 Build and unit tests do not establish in-game correctness; these checks require the user's confirmation. This plugin is not yet published to the Plugin Hub.
+
+Additional checks: add two steps on separate lines, tick the first, and confirm the overlay shows the second. Re-login and check the tick persists. Check the updated label changes after edits. Complete two short sessions and expand session history to see separate recaps. Turn off the login recap to verify that logging in no longer opens the journal.
