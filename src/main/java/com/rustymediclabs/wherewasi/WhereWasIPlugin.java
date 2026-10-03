@@ -292,7 +292,7 @@ public class WhereWasIPlugin extends Plugin
 				setMapPoint(previous, snapshot.entrance);
 				SwingUtilities.invokeLater(() ->
 				{
-					if (running && panel == target) { target.showMap(profile, snapshot); }
+					if (running && panel == target && session == accountSession) { target.showMap(profile, snapshot); }
 				});
 			});
 		}
@@ -304,6 +304,7 @@ public class WhereWasIPlugin extends Plugin
 		clearMapPoint();
 		savedMapPoint = new WorldMapPoint(mapTarget(visit, entrance), WhereWasIPanel.createIcon());
 		savedMapPoint.setName(entrance == null ? "Where Was I? Saved location" : "Where Was I? " + entrance.name);
+		savedMapPoint.setTooltip(savedMapPoint.getName());
 		savedMapPoint.setJumpOnClick(true);
 		mapPoints.add(savedMapPoint);
 	}

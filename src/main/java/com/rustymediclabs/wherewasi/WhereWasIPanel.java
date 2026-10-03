@@ -155,7 +155,7 @@ final class WhereWasIPanel extends PluginPanel
 		displayedVisit = visit;
 		displayedEntrance = null;
 		mapPreview.setIcon(null);
-		mapPreview.setText(visit == null ? "No saved map yet" : "Open saved location on map");
+		mapPreview.setText(visit == null ? "No saved map yet" : "Open world map");
 		mapPreview.setEnabled(visit != null);
 		mapPreview.setPreferredSize(new Dimension(0, 42));
 		mapHelp.setText(visit == null ? "A terrain preview will be saved for your next visit."
@@ -194,7 +194,9 @@ final class WhereWasIPanel extends PluginPanel
 
 	void showMap(String accountProfile, MapSnapshot snapshot)
 	{
-		if (!accountProfile.equals(profile)) { return; }
+		if (!accountProfile.equals(profile) || displayedVisit == null
+			|| displayedVisit.x != snapshot.visit.x || displayedVisit.y != snapshot.visit.y
+			|| displayedVisit.plane != snapshot.visit.plane) { return; }
 		displayedEntrance = snapshot.entrance;
 		mapPreview.setText("");
 		mapPreview.setIcon(new ImageIcon(snapshot.image));

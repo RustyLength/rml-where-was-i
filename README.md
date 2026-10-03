@@ -10,7 +10,7 @@ An account-specific reminder sidebar for RuneLite. This first development versio
 - A location checkpoint every 30 seconds and on logout, client close or plugin disable.
 - An optional login message pointing you to the sidebar.
 
-RuneLite's ConfigManager stores the data. The plugin sends no HTTP requests. Normal RuneLite profile sync settings apply. Notes belong to a RuneScape profile, including its game mode, and do not depend on a display name. The previous-visit card stays fixed during a session and refreshes on the next login. World hopping does not start a new session. A forced process termination can lose changes since RuneLite's last disk flush.
+RuneLite's ConfigManager stores notes and visit metadata; terrain previews are local files. The plugin sends no HTTP requests. Normal RuneLite profile sync settings apply to notes and visit metadata. Notes belong to a RuneScape profile, including its game mode, and do not depend on a display name. The previous-visit card stays fixed during a session and refreshes on the next login. World hopping does not start a new session. A forced process termination can lose changes since RuneLite's last disk flush.
 
 ## Run locally
 
