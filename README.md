@@ -5,6 +5,8 @@ An account-specific reminder sidebar for RuneLite. This first development versio
 - A gold question-mark sidebar button and RML branding.
 - A next-steps note that saves as you type, separately for each RuneScape profile.
 - The previous saved tile coordinates, floor, world and time.
+- A saved terrain preview with a gold location dot; click to open and centre the world map.
+- An RML question-mark marker on the world map.
 - A location checkpoint every 30 seconds and on logout, client close or plugin disable.
 - An optional login message pointing you to the sidebar.
 
@@ -28,6 +30,12 @@ Use Java 11 and run `./gradlew run` (`.\gradlew.bat run` on Windows). Jagex-acco
 
 ## Planned next stages
 
-The approved OSRS character artwork, mini-map preview, clickable world map and dungeon entrance mapping are not implemented in this first version. Inventory/equipment snapshots and session history will follow after the initial account/location checks.
+The approved OSRS character artwork, inventory/equipment snapshots and session history are still planned.
+
+Terrain previews are stored locally in RuneLite's plugin data directory using Filepath, separately for each account. File operations and PNG encoding run off the client thread. Terrain is rendered once after a scene load or floor change, rather than scanned every tick. The image and its coordinates are stored together. The sidebar remains fixed to the previous visit during the current session.
+
+Recorded dungeon entries initially support Brimhaven north/south, Taverley, Lumbridge Swamp Caves, Edgeville main/shed and Catacombs of Kourend. The plugin must observe you walking through an entrance; logging in underground or teleporting there does not guess an entrance. The preview shows the actual dungeon tile; clicking targets the recorded surface entrance. Unsupported dungeon coordinates may not be present on the world map.
+
+Map acceptance checks: after updating, log in, log out and back in to create the first preview. Verify the gold dot matches the saved terrain and click it with the world map closed, then open. Walk elsewhere and hop worlds: the previous preview should remain fixed. Close normally and relaunch; verify persistence and switch accounts to check isolation. For an entrance test, enter Brimhaven from the surface while the plugin is enabled, log out inside, return, and click the preview: verify the surface entrance is marked. Starting underground without an observed entry must not invent one.
 
 Not yet published to the Plugin Hub. Not affiliated with Jagex or RuneLite.

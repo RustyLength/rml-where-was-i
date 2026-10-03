@@ -17,6 +17,7 @@ import java.util.function.BiConsumer;
 import javax.swing.BorderFactory;
 import javax.swing.ImageIcon;
 import javax.swing.JLabel;
+import javax.swing.JButton;
 import javax.swing.JPanel;
 import javax.swing.JScrollPane;
 import javax.swing.JTextArea;
@@ -34,13 +35,24 @@ final class WhereWasIPanel extends PluginPanel
 	private final JTextArea previous = textArea(4);
 	private final JTextArea note = textArea(9);
 	private final JLabel status = new JLabel();
+	private final JButton mapPreview = new JButton("Preview available after your next visit");
+	private final JTextArea mapHelp = textArea(2);
+	private final MapAction openMap;
+	private LastVisit displayedVisit;
+	private EntranceTracker.Entry displayedEntrance;
 	private final BiConsumer<String, String> saveNote;
 	private String profile;
 	private boolean loading;
 
 	WhereWasIPanel(BiConsumer<String, String> saveNote)
 	{
+		this(saveNote, (profile, visit, entrance) -> { });
+	}
+
+	WhereWasIPanel(BiConsumer<String, String> saveNote, MapAction openMap)
+	{
 		this.saveNote = saveNote;
+		this.openMap = openMap;
 		setLayout(new GridBagLayout());
 		setBackground(STONE);
 		setBorder(BorderFactory.createEmptyBorder(12, 10, 14, 10));
@@ -65,7 +77,28 @@ final class WhereWasIPanel extends PluginPanel
 		account.setForeground(GOLD);
 		addRow(section("YOUR CHARACTER", account), 1);
 		previous.setEditable(false);
-		addRow(section("LAST TIME YOU WERE HERE", previous), 2);
+		JPanel location = new JPanel(new BorderLayout(0, 8));
+		location.setOpaque(false);
+		location.add(previous, BorderLayout.NORTH);
+		mapPreview.setPreferredSize(new Dimension(0, MapSnapshot.SIZE));
+		mapPreview.setMargin(new Insets(0, 0, 0, 0));
+		mapPreview.setForeground(GOLD);
+		mapPreview.setBackground(new Color(24, 23, 20));
+		mapPreview.setBorder(BorderFactory.createLineBorder(new Color(101, 80, 50)));
+		mapPreview.setToolTipText("Open the world map at your saved location");
+		mapPreview.addActionListener(event ->
+		{
+			if (profile != null && displayedVisit != null)
+			{
+				mapHelp.setText("Opening world map…");
+				openMap.open(profile, displayedVisit, displayedEntrance);
+			}
+		});
+		location.add(mapPreview, BorderLayout.CENTER);
+		mapHelp.setEditable(false);
+		mapHelp.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 11));
+		location.add(mapHelp, BorderLayout.SOUTH);
+		addRow(section("LAST TIME YOU WERE HERE", location), 2);
 		JScrollPane editor = new JScrollPane(note);
 		editor.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
 		editor.setPreferredSize(new Dimension(0, 170));
@@ -119,6 +152,14 @@ final class WhereWasIPanel extends PluginPanel
 	{
 		loading = true;
 		this.profile = profile;
+		displayedVisit = visit;
+		displayedEntrance = null;
+		mapPreview.setIcon(null);
+		mapPreview.setText(visit == null ? "No saved map yet" : "Open saved location on map");
+		mapPreview.setEnabled(visit != null);
+		mapPreview.setPreferredSize(new Dimension(0, 42));
+		mapHelp.setText(visit == null ? "A terrain preview will be saved for your next visit."
+			: "No terrain preview yet. Click for your saved coordinates.");
 		account.setText(name);
 		note.setText(text == null ? "" : text);
 		note.setCaretPosition(0);
@@ -136,12 +177,42 @@ final class WhereWasIPanel extends PluginPanel
 	{
 		loading = true;
 		profile = null;
+		displayedVisit = null;
+		displayedEntrance = null;
+		mapPreview.setIcon(null);
+		mapPreview.setText("No account loaded");
+		mapPreview.setEnabled(false);
+		mapPreview.setPreferredSize(new Dimension(0, 42));
+		mapHelp.setText("Your preview is saved separately for each character.");
 		account.setText("Log in to load your account");
 		previous.setText("Your saved location will appear here after you log in again.");
 		note.setText("");
 		note.setEnabled(false);
 		status.setText("Waiting for your account");
 		loading = false;
+	}
+
+	void showMap(String accountProfile, MapSnapshot snapshot)
+	{
+		if (!accountProfile.equals(profile)) { return; }
+		displayedEntrance = snapshot.entrance;
+		mapPreview.setText("");
+		mapPreview.setIcon(new ImageIcon(snapshot.image));
+		mapPreview.setPreferredSize(new Dimension(0, MapSnapshot.SIZE));
+		mapHelp.setText(snapshot.entrance == null ? "Gold dot: saved tile. Click to open the map."
+			: "Recorded entry: " + snapshot.entrance.name + ". Click for its entrance.");
+		revalidate();
+		repaint();
+	}
+
+	void mapStatus(String accountProfile, String text)
+	{
+		if (accountProfile != null && accountProfile.equals(profile)) { mapHelp.setText(text); }
+	}
+
+	interface MapAction
+	{
+		void open(String profile, LastVisit visit, EntranceTracker.Entry entrance);
 	}
 
 	private static JTextArea textArea(int rows)
