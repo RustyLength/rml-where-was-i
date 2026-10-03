@@ -10,15 +10,13 @@ import java.awt.Insets;
 import java.awt.Graphics2D;
 import java.awt.RenderingHints;
 import java.awt.image.BufferedImage;
-import java.awt.geom.Path2D;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
-import java.util.function.BiConsumer;
+import java.util.Locale;
 import javax.swing.BorderFactory;
 import javax.swing.ImageIcon;
 import javax.swing.JLabel;
-import javax.swing.JButton;
 import javax.swing.JPanel;
 import javax.swing.JScrollPane;
 import javax.swing.JTextArea;
@@ -33,105 +31,86 @@ final class WhereWasIPanel extends PluginPanel
 	private static final DateTimeFormatter TIME = DateTimeFormatter.ofPattern("dd MMM yyyy, HH:mm")
 		.withZone(ZoneId.systemDefault());
 	private final JTextArea account = textArea(1);
-	private final JTextArea previous = textArea(4);
-	private final JTextArea note = textArea(9);
+	private final JTextArea activity = textArea(2);
+	private final JTextArea steps = textArea(5);
+	private final JTextArea supplies = textArea(2);
+	private final JTextArea recap = textArea(3);
+	private final JTextArea prompt = textArea(2);
 	private final JLabel status = new JLabel();
-	private final JButton mapPreview = new JButton("Preview available after your next visit");
-	private final JTextArea mapHelp = textArea(2);
-	private final MapAction openMap;
-	private LastVisit displayedVisit;
-	private EntranceTracker.Entry displayedEntrance;
-	private final BiConsumer<String, String> saveNote;
+	private final JournalWriter writer;
 	private String profile;
 	private boolean loading;
 
-	WhereWasIPanel(BiConsumer<String, String> saveNote)
+	WhereWasIPanel(JournalWriter writer)
 	{
-		this(saveNote, (profile, visit, entrance) -> { });
-	}
-
-	WhereWasIPanel(BiConsumer<String, String> saveNote, MapAction openMap)
-	{
-		this.saveNote = saveNote;
-		this.openMap = openMap;
+		this.writer = writer;
 		setLayout(new GridBagLayout());
 		setBackground(STONE);
 		setBorder(BorderFactory.createEmptyBorder(12, 10, 14, 10));
 		getScrollPane().setBorder(BorderFactory.createEmptyBorder());
 		getScrollPane().getViewport().setBackground(STONE);
-
 		JPanel heading = new JPanel(new BorderLayout(10, 0));
 		heading.setBackground(STONE);
-		JPanel titles = new JPanel(new BorderLayout(0, 4));
-		titles.setBackground(STONE);
-		titles.add(label("Where Was I?", 19), BorderLayout.CENTER);
-		heading.add(titles, BorderLayout.CENTER);
+		heading.add(label("Where Was I?", 19), BorderLayout.CENTER);
 		heading.add(new JLabel(new ImageIcon(createIcon())), BorderLayout.EAST);
 		heading.setBorder(BorderFactory.createCompoundBorder(
 			BorderFactory.createMatteBorder(0, 0, 1, 0, new Color(101, 80, 50)),
 			BorderFactory.createEmptyBorder(0, 0, 12, 0)));
 		addRow(heading, 0);
-
 		account.setEditable(false);
 		account.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 14));
 		account.setForeground(GOLD);
 		addRow(section("YOUR CHARACTER", account), 1);
-		previous.setEditable(false);
-		JPanel location = new JPanel(new BorderLayout(0, 8));
-		location.setOpaque(false);
-		location.add(previous, BorderLayout.NORTH);
-		mapPreview.setPreferredSize(new Dimension(0, MapSnapshot.SIZE));
-		mapPreview.setMargin(new Insets(0, 0, 0, 0));
-		mapPreview.setForeground(GOLD);
-		mapPreview.setBackground(new Color(24, 23, 20));
-		mapPreview.setBorder(BorderFactory.createLineBorder(new Color(101, 80, 50)));
-		mapPreview.setToolTipText("Open the world map at your saved location");
-		mapPreview.addActionListener(event ->
-		{
-			if (profile != null && displayedVisit != null)
-			{
-				mapHelp.setText("Opening world map…");
-				openMap.open(profile, displayedVisit, displayedEntrance);
-			}
-		});
-		location.add(mapPreview, BorderLayout.CENTER);
-		mapHelp.setEditable(false);
-		mapHelp.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 11));
-		location.add(mapHelp, BorderLayout.SOUTH);
-		addRow(section("LAST TIME YOU WERE HERE", location), 2);
-		JScrollPane editor = new JScrollPane(note);
-		editor.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
-		editor.setPreferredSize(new Dimension(0, 170));
-		editor.setBorder(BorderFactory.createLineBorder(new Color(101, 80, 50)));
-		editor.getViewport().setBackground(new Color(32, 29, 25));
-		JPanel notes = new JPanel(new BorderLayout(0, 8));
-		notes.setOpaque(false);
-		notes.add(editor, BorderLayout.CENTER);
+		prompt.setEditable(false);
+		prompt.setForeground(GOLD);
+		addRow(prompt, 2);
+		addRow(section("I WAS WORKING ON", editor(activity, 65)), 3);
+		addRow(section("MY NEXT STEPS", editor(steps, 125)), 4);
+		addRow(section("DON'T FORGET", editor(supplies, 65)), 5);
 		status.setForeground(GOLD);
 		status.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 11));
-		notes.add(status, BorderLayout.SOUTH);
-		addRow(section("MY NEXT STEPS", notes), 3);
-		JTextArea help = textArea(3);
-		help.setEditable(false);
-		help.setBackground(STONE);
-		help.setForeground(new Color(177, 163, 141));
-		help.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 11));
-		help.setText("A reminder for your next adventure. Notes save as you type; your location saves when you log out.");
-		addRow(help, 4);
+		addRow(status, 6);
+		recap.setEditable(false);
+		addRow(section("LAST SESSION", recap), 7);
 		JTextArea credit = textArea(1);
 		credit.setEditable(false);
 		credit.setBackground(STONE);
 		credit.setForeground(new Color(151, 137, 115));
 		credit.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 10));
 		credit.setText("Designed by Rusty Medic Labs");
-		addRow(credit, 5);
-		note.getDocument().addDocumentListener(new DocumentListener()
+		addRow(credit, 8);
+		listen(activity, WhereWasIPlugin.ACTIVITY);
+		listen(steps, WhereWasIPlugin.NEXT_STEPS);
+		listen(supplies, WhereWasIPlugin.SUPPLIES);
+		showLoggedOut();
+	}
+
+	private static JScrollPane editor(JTextArea text, int height)
+	{
+		JScrollPane scroll = new JScrollPane(text);
+		scroll.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
+		scroll.setPreferredSize(new Dimension(0, height));
+		scroll.setBorder(BorderFactory.createLineBorder(new Color(101, 80, 50)));
+		return scroll;
+	}
+
+	private void listen(JTextArea text, String key)
+	{
+		text.setName(key);
+		text.getDocument().addDocumentListener(new DocumentListener()
 		{
 			@Override public void insertUpdate(DocumentEvent event) { changed(); }
 			@Override public void removeUpdate(DocumentEvent event) { changed(); }
 			@Override public void changedUpdate(DocumentEvent event) { changed(); }
+			private void changed()
+			{
+				if (!loading && profile != null)
+				{
+					writer.save(profile, key, text.getText());
+					status.setText("Saved for this character");
+				}
+			}
 		});
-		showLoggedOut();
 	}
 
 	private void addRow(java.awt.Component component, int row)
@@ -142,86 +121,79 @@ final class WhereWasIPanel extends PluginPanel
 		constraints.weightx = 1;
 		constraints.fill = GridBagConstraints.HORIZONTAL;
 		constraints.anchor = GridBagConstraints.NORTHWEST;
-		constraints.insets = new Insets(row == 0 ? 0 : 12, 0, 0, 0);
+		constraints.insets = new Insets(row == 0 ? 0 : 10, 0, 0, 0);
 		add(component, constraints);
 	}
 
-	private void changed()
-	{
-		if (!loading && profile != null)
-		{
-			saveNote.accept(profile, note.getText());
-			status.setText("Saved for this account");
-		}
-	}
-
-	void showAccount(String profile, String name, String text, LastVisit visit)
+	void showAccount(String profile, String name, String activityText, String stepsText,
+		String suppliesText, SessionRecap previous)
 	{
 		loading = true;
 		this.profile = profile;
-		displayedVisit = visit;
-		displayedEntrance = null;
-		mapPreview.setIcon(null);
-		mapPreview.setText(visit == null ? "No saved map yet" : "Open world map");
-		mapPreview.setEnabled(visit != null);
-		mapPreview.setPreferredSize(new Dimension(0, 42));
-		mapHelp.setText(visit == null ? "A terrain preview will be saved for your next visit."
-			: "No terrain preview yet. Click for your saved coordinates.");
 		account.setText(name);
-		note.setText(text == null ? "" : text);
-		note.setCaretPosition(0);
-		note.setEnabled(true);
-		previous.setText(visit == null ? "No previous visit yet.\nYour first visit will be saved automatically."
-			: "World " + visit.world + " · Floor " + visit.plane
-			+ "\nTile " + visit.x + ", " + visit.y + "\n" + TIME.format(Instant.ofEpochMilli(visit.savedAt)));
-		status.setText("Notes ready");
+		load(activity, activityText);
+		load(steps, stepsText);
+		load(supplies, suppliesText);
+		prompt.setText("Pick up where you left off. Your journal saves as you type.");
+		showRecap(previous);
+		status.setText("Journal ready");
 		loading = false;
-		revalidate();
-		repaint();
+	}
+
+	private static void load(JTextArea editor, String text)
+	{
+		editor.setText(text == null ? "" : text);
+		editor.setCaretPosition(0);
+		editor.setEnabled(true);
+	}
+
+	void showSessionEnded(String accountProfile, SessionRecap ended, boolean remind)
+	{
+		if (!accountProfile.equals(profile)) { return; }
+		showRecap(ended);
+		// Keep this explicit profile and its editors available on the login screen.
+		prompt.setText(remind ? "Before you go: leave your future self a reminder. You are already logged out."
+			: "Logged out. You can still update this character's journal.");
 	}
 
 	void showLoggedOut()
 	{
 		loading = true;
 		profile = null;
-		displayedVisit = null;
-		displayedEntrance = null;
-		mapPreview.setIcon(null);
-		mapPreview.setText("No account loaded");
-		mapPreview.setEnabled(false);
-		mapPreview.setPreferredSize(new Dimension(0, 42));
-		mapHelp.setText("Your preview is saved separately for each character.");
-		account.setText("Log in to load your account");
-		previous.setText("Your saved location will appear here after you log in again.");
-		note.setText("");
-		note.setEnabled(false);
-		status.setText("Waiting for your account");
+		account.setText("Log in to load your character");
+		for (JTextArea text : new JTextArea[]{activity, steps, supplies})
+		{
+			text.setText("");
+			text.setEnabled(false);
+		}
+		prompt.setText("Your journal is saved separately for each character.");
+		showRecap(null);
+		status.setText("Waiting for your character");
 		loading = false;
 	}
 
-	void showMap(String accountProfile, MapSnapshot snapshot)
+	private void showRecap(SessionRecap previous)
 	{
-		if (!accountProfile.equals(profile) || displayedVisit == null
-			|| displayedVisit.x != snapshot.visit.x || displayedVisit.y != snapshot.visit.y
-			|| displayedVisit.plane != snapshot.visit.plane) { return; }
-		displayedEntrance = snapshot.entrance;
-		mapPreview.setText("");
-		mapPreview.setIcon(new ImageIcon(snapshot.image));
-		mapPreview.setPreferredSize(new Dimension(0, MapSnapshot.SIZE));
-		mapHelp.setText(snapshot.entrance == null ? "Gold dot: saved tile. Click to open the map."
-			: "Recorded entry: " + snapshot.entrance.name + ". Click for its entrance.");
-		revalidate();
-		repaint();
+		if (previous == null)
+		{
+			recap.setText("Your first session recap will appear after you log out.");
+			return;
+		}
+		StringBuilder text = new StringBuilder(TIME.format(Instant.ofEpochMilli(previous.endedAt)));
+		if (!previous.tracked) { text.append("\nXP tracking starts with this update."); }
+		else if (previous.gains.isEmpty()) { text.append("\nNo XP gains recorded."); }
+		else
+		{
+			previous.gains.entrySet().stream().sorted((a, b) -> Integer.compare(b.getValue(), a.getValue()))
+				.forEach(entry -> text.append("\n").append(entry.getKey().getName()).append(": +")
+					.append(String.format(Locale.UK, "%,d", entry.getValue())).append(" XP"));
+		}
+		recap.setText(text.toString());
 	}
 
-	void mapStatus(String accountProfile, String text)
+	interface JournalWriter
 	{
-		if (accountProfile != null && accountProfile.equals(profile)) { mapHelp.setText(text); }
-	}
-
-	interface MapAction
-	{
-		void open(String profile, LastVisit visit, EntranceTracker.Entry entrance);
+		void save(String profile, String key, String text);
 	}
 
 	private static JTextArea textArea(int rows)
@@ -259,6 +231,7 @@ final class WhereWasIPanel extends PluginPanel
 		return section;
 	}
 
+
 	static BufferedImage createIcon()
 	{
 		BufferedImage icon = new BufferedImage(24, 24, BufferedImage.TYPE_INT_ARGB);
@@ -268,50 +241,19 @@ final class WhereWasIPanel extends PluginPanel
 			graphics.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
 			graphics.setColor(new Color(26, 24, 21));
 			graphics.fillRoundRect(0, 0, 24, 24, 5, 5);
-			Path2D map = new Path2D.Double();
-			map.moveTo(2, 5);
-			map.lineTo(8, 3);
-			map.lineTo(15, 6);
-			map.lineTo(22, 3);
-			map.lineTo(22, 19);
-			map.lineTo(15, 22);
-			map.lineTo(8, 19);
-			map.lineTo(2, 21);
-			map.closePath();
-			graphics.setColor(new Color(104, 83, 47));
-			graphics.fill(map);
+			graphics.setColor(new Color(104, 73, 39));
+			graphics.fillRoundRect(4, 2, 17, 20, 3, 3);
 			graphics.setColor(GOLD);
-			graphics.draw(map);
-			graphics.drawLine(8, 4, 8, 18);
-			graphics.drawLine(15, 7, 15, 20);
-			graphics.drawImage(createMapPin(), 6, 1, 13, 19, null);
+			graphics.drawRoundRect(4, 2, 17, 20, 3, 3);
+			graphics.drawLine(7, 3, 7, 21);
+			graphics.setColor(new Color(237, 218, 175));
+			graphics.drawLine(10, 9, 18, 9);
+			graphics.drawLine(10, 12, 18, 12);
+			graphics.drawLine(10, 15, 16, 15);
+			graphics.setColor(new Color(155, 53, 43));
+			graphics.fillRect(14, 2, 4, 5);
 		}
 		finally { graphics.dispose(); }
 		return icon;
-	}
-
-	static BufferedImage createMapPin()
-	{
-		BufferedImage image = new BufferedImage(24, 32, BufferedImage.TYPE_INT_ARGB);
-		Graphics2D graphics = image.createGraphics();
-		try
-		{
-			graphics.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-			Path2D pin = new Path2D.Double();
-			pin.moveTo(12, 30);
-			pin.curveTo(9, 25, 2, 16, 2, 11);
-			pin.curveTo(2, -2, 22, -2, 22, 11);
-			pin.curveTo(22, 16, 15, 25, 12, 30);
-			pin.closePath();
-			graphics.setColor(GOLD);
-			graphics.fill(pin);
-			graphics.setColor(new Color(45, 34, 19));
-			graphics.draw(pin);
-			graphics.fillOval(7, 6, 10, 10);
-			graphics.setColor(new Color(255, 229, 167));
-			graphics.drawArc(4, 3, 15, 15, 40, 100);
-		}
-		finally { graphics.dispose(); }
-		return image;
 	}
 }

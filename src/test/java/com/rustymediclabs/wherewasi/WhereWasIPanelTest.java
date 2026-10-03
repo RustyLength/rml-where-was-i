@@ -5,8 +5,6 @@ import java.awt.Container;
 import java.util.ArrayList;
 import java.util.List;
 import javax.swing.JTextArea;
-import javax.swing.JButton;
-import java.awt.image.BufferedImage;
 import javax.swing.SwingUtilities;
 import org.junit.Test;
 import static org.junit.Assert.*;
@@ -14,83 +12,53 @@ import static org.junit.Assert.*;
 public class WhereWasIPanelTest
 {
 	@Test
-	public void aLateMapForAnotherAccountCannotReplaceTheDisplayedVisit() throws Exception
-	{
-		SwingUtilities.invokeAndWait(() ->
-		{
-			List<String> opened = new ArrayList<>();
-			WhereWasIPanel panel = new WhereWasIPanel((key, value) -> { },
-				(key, visit, entrance) -> opened.add(key + ":" + visit.x + ":" + (entrance == null ? "" : entrance.id)));
-			LastVisit main = new LastVisit(2700, 9512, 0, 301, 1);
-			LastVisit iron = new LastVisit(3087, 3236, 0, 379, 2);
-			MapSnapshot mainMap = new MapSnapshot(main, EntranceTracker.byId("brimhaven-n"),
-				new BufferedImage(MapSnapshot.SIZE, MapSnapshot.SIZE, BufferedImage.TYPE_INT_RGB));
-			panel.showAccount("main", "Main", "", main);
-			panel.showMap("main", mainMap);
-			JButton button = findButton(panel);
-			button.doClick();
-			assertEquals("main:2700:brimhaven-n", opened.get(0));
-			panel.showAccount("iron", "Iron", "", iron);
-			panel.showMap("main", mainMap);
-			assertNull(button.getIcon());
-			button.doClick();
-			assertEquals("iron:3087:", opened.get(1));
-			panel.showLoggedOut();
-			assertFalse(button.isEnabled());
-		});
-	}
-
-	private static JButton findButton(Container container)
-	{
-		for (Component child : container.getComponents())
-		{
-			if (child instanceof JButton) { return (JButton) child; }
-			if (child instanceof Container)
-			{
-				JButton found = findButton((Container) child);
-				if (found != null) { return found; }
-			}
-		}
-		return null;
-	}
-
-	@Test
-	public void switchingAccountsDoesNotCopyOrEraseAnotherAccountsNote() throws Exception
+	public void journalEditsStayWithTheirCharacterIncludingAfterLogout() throws Exception
 	{
 		SwingUtilities.invokeAndWait(() ->
 		{
 			List<String> writes = new ArrayList<>();
-			WhereWasIPanel panel = new WhereWasIPanel((key, value) -> writes.add(key + ":" + value));
-			JTextArea editor = findEditor(panel);
-			assertNotNull(editor);
-			assertFalse(editor.isEnabled());
-			panel.showAccount("rsprofile.main", "BudgieMS", "Main plan", null);
+			WhereWasIPanel panel = new WhereWasIPanel((profile, key, text) ->
+				writes.add(profile + ":" + key + ":" + text));
+			JTextArea steps = findEditor(panel, WhereWasIPlugin.NEXT_STEPS);
+			JTextArea activity = findEditor(panel, WhereWasIPlugin.ACTIVITY);
+			JTextArea supplies = findEditor(panel, WhereWasIPlugin.SUPPLIES);
+			assertFalse(steps.isEnabled());
+			panel.showAccount("main", "BudgieMS", "Slayer", "Original note\nexactly as saved", "Antifire", null);
 			assertTrue(writes.isEmpty());
-			assertEquals("Main plan", editor.getText());
-			editor.append(" tomorrow");
-			assertEquals("rsprofile.main:Main plan tomorrow", writes.get(writes.size() - 1));
-			int beforeSwitch = writes.size();
-			panel.showAccount("rsprofile.iron", "BudgieFE", "Iron plan", null);
-			assertEquals(beforeSwitch, writes.size());
-			assertEquals("Iron plan", editor.getText());
-			editor.append(" next");
-			assertEquals("rsprofile.iron:Iron plan next", writes.get(writes.size() - 1));
-			int beforeLogout = writes.size();
+			assertEquals("Original note\nexactly as saved", steps.getText());
+			activity.append(" task");
+			assertEquals("main:currentActivityV1:Slayer task", writes.get(writes.size() - 1));
+			supplies.append(" and food");
+			assertEquals("main:rememberSuppliesV1:Antifire and food", writes.get(writes.size() - 1));
+			int count = writes.size();
+			panel.showSessionEnded("main", SessionRecap.legacy(1), true);
+			assertEquals(count, writes.size());
+			assertTrue(steps.isEnabled());
+			steps.append(" tomorrow");
+			assertEquals("main:nextSteps:Original note\nexactly as saved tomorrow", writes.get(writes.size() - 1));
+			count = writes.size();
+			panel.showAccount("iron", "BudgieFE", "Woodcutting", "Iron reminder", "Axe", null);
+			assertEquals(count, writes.size());
+			// A stale logout callback must not change the new character's journal.
+			panel.showSessionEnded("main", SessionRecap.legacy(1), true);
+			assertEquals("Iron reminder", steps.getText());
+			steps.append(" next");
+			assertEquals("iron:nextSteps:Iron reminder next", writes.get(writes.size() - 1));
+			count = writes.size();
 			panel.showLoggedOut();
-			assertEquals(beforeLogout, writes.size());
-			assertFalse(editor.isEnabled());
-			assertEquals("", editor.getText());
+			assertEquals(count, writes.size());
+			assertFalse(steps.isEnabled());
 		});
 	}
 
-	private static JTextArea findEditor(Container container)
+	private static JTextArea findEditor(Container container, String key)
 	{
 		for (Component child : container.getComponents())
 		{
-			if (child instanceof JTextArea && ((JTextArea) child).isEditable()) { return (JTextArea) child; }
+			if (child instanceof JTextArea && key.equals(child.getName())) { return (JTextArea) child; }
 			if (child instanceof Container)
 			{
-				JTextArea found = findEditor((Container) child);
+				JTextArea found = findEditor((Container) child, key);
 				if (found != null) { return found; }
 			}
 		}

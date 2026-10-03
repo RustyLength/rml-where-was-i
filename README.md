@@ -1,43 +1,35 @@
-# Where Was I? — Rusty Medic Labs
+# Where Was I?
 
-An account-specific reminder sidebar for RuneLite. This first development version provides:
+An account-specific adventure journal for RuneLite, designed by Rusty Medic Labs.
 
-- A folded-map sidebar badge for Where Was I?, with a small Rusty Medic Labs designer credit in the footer.
-- A next-steps note that saves as you type, separately for each RuneScape profile.
-- The previous saved tile coordinates, floor, world and time.
-- A saved terrain preview with a gold location dot; click to open and centre the world map.
-- A gold pin on the world map, anchored at the saved tile.
-- A location checkpoint every 30 seconds and on logout, client close or plugin disable.
-- An optional login message pointing you to the sidebar.
+Leave yourself three reminders: **I was working on**, **My next steps**, and **Don't forget** (supplies, gear, or anything else). Existing next-step notes are preserved, and each RuneScape character has its own journal.
 
-RuneLite's ConfigManager stores notes and visit metadata; terrain previews are local files. The plugin sends no HTTP requests. Normal RuneLite profile sync settings apply to notes and visit metadata. Notes belong to a RuneScape profile, including its game mode, and do not depend on a display name. The previous-visit card stays fixed during a session and refreshes on the next login. World hopping does not start a new session. A forced process termination can lose changes since RuneLite's last disk flush.
+A small **on-screen reminder** shows your next step even when the sidebar is closed. Hold **Alt** and drag it using RuneLite's standard overlay controls. Turn off **On-screen journal reminder** in plugin settings to hide it.
 
-## Run locally
+After normal logout, **Logout journal reminder** opens the journal with a gentle prompt. Logout is never blocked or delayed. You can still edit the character's journal on the login screen; the next login loads the appropriate character's saved notes. Turn off the logout setting to stop automatically opening the sidebar.
 
-Use Java 11 and run `./gradlew run` (`.\gradlew.bat run` on Windows). Jagex-account users should follow [RuneLite's development-client login instructions](https://github.com/runelite/runelite/wiki/Using-Jagex-Accounts).
+**Last session** shows XP gained by skill while the plugin was enabled. World hops keep the same session; disabling and enabling the plugin starts another session. XP is checkpointed every 30 seconds and saved on logout and normal client close. Force-closing RuneLite may lose recent changes. The old saved-location timestamp is retained for the first recap; the map preview and pin have been removed.
 
-## Manual acceptance check
+All journal data uses RuneLite configuration storage. No third-party requests or uploads.
 
-1. Log in, enable **Where Was I?**, and open its folded-map sidebar button.
-2. Type a note, log out and back in. Confirm the note, previous location, world and time.
-3. Walk to another location, then close RuneLite normally. Relaunch and verify the last location.
-4. Switch accounts; verify each has its own note and that the login screen disables editing.
-5. Hop worlds; verify your note and previous-visit card stay unchanged.
-6. Disable/re-enable the plugin and verify there is only one sidebar button and the note survives.
-7. Turn the welcome message off and verify a new login produces no plugin chat reminder.
+## Development
 
-`./gradlew build` runs offline model/Swing checks; these do not verify in-game behaviour.
+Java 11-compatible plugin with the official example-plugin Gradle structure.
 
-## Planned next stages
+```powershell
+git pull
+.\gradlew.bat run --console=plain
+```
 
-The approved OSRS character artwork, inventory/equipment snapshots and session history are still planned.
+On Linux/macOS use `./gradlew run`. For Jagex Accounts, follow [RuneLite's development-client login instructions](https://github.com/runelite/runelite/wiki/Using-Jagex-Accounts). Never share account credentials.
 
-Terrain previews are stored locally in RuneLite's plugin data directory using Filepath, separately for each account. File operations and PNG encoding run off the client thread. Terrain is rendered once after a scene load or floor change, rather than scanned every tick. The image and its coordinates are stored together. The sidebar remains fixed to the previous visit during the current session.
+## Manual checks
 
-If a preview is missing on an initial install, it can be rebuilt for the saved tile when that tile is in the currently loaded ordinary scene. Other regions and instances are not guessed. Capture, storage and loading failures show a message in the sidebar and diagnostic details in the RuneLite debug log.
+1. Confirm your existing next-step note remains. Add an activity and supplies.
+2. Close the sidebar: the overlay should still show the next step. Hold Alt and drag it, then test hiding it through plugin settings.
+3. Gain a little XP, then log out normally. Logout should proceed immediately, the journal should open, and the recap should show the XP gained.
+4. Edit a reminder while logged out, then log back in: the edit should remain. Switch between main and iron characters: journals should stay separate.
+5. World-hop: the journal and current session should remain. Disable the logout reminder and confirm normal logout doesn't open the sidebar.
+6. Close and relaunch normally to check persistence and the previous session recap.
 
-Recorded dungeon entries initially support Brimhaven north/south, Taverley, Lumbridge Swamp Caves, Edgeville main/shed and Catacombs of Kourend. The plugin must observe you walking through an entrance; logging in underground or teleporting there does not guess an entrance. The preview shows the actual dungeon tile; clicking targets the recorded surface entrance. Unsupported dungeon coordinates may not be present on the world map.
-
-Map acceptance checks: after updating, log in, log out and back in to create the first preview. Verify the gold dot matches the saved terrain and click it with the world map closed, then open. Walk elsewhere and hop worlds: the previous preview should remain fixed. Close normally and relaunch; verify persistence and switch accounts to check isolation. For an entrance test, enter Brimhaven from the surface while the plugin is enabled, log out inside, return, and click the preview: verify the surface entrance is marked. Starting underground without an observed entry must not invent one.
-
-Not yet published to the Plugin Hub. Not affiliated with Jagex or RuneLite.
+Build and unit tests do not establish in-game correctness; these checks require the user's confirmation. This plugin is not yet published to the Plugin Hub.
