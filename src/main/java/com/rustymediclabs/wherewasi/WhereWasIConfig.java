@@ -4,16 +4,18 @@ import net.runelite.client.config.Config;
 import net.runelite.client.config.ConfigGroup;
 import net.runelite.client.config.ConfigItem;
 
-@ConfigGroup("example")
+@ConfigGroup(WhereWasIConfig.GROUP)
 public interface WhereWasIConfig extends Config
 {
+	String GROUP = "rml-where-was-i";
+
 	@ConfigItem(
-		keyName = "greeting",
-		name = "Welcome Greeting",
-		description = "The message to show to the user when they login"
+		keyName = "welcomeMessage",
+		name = "Welcome-back message",
+		description = "Show a chat reminder of the RML sidebar when you log in"
 	)
-	default String greeting()
+	default boolean welcomeMessage()
 	{
-		return "Hello";
+		return true;
 	}
 }
