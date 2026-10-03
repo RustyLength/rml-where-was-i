@@ -1,4 +1,4 @@
-package com.example;
+package com.rustymediclabs.wherewasi;
 
 import com.google.inject.Provides;
 import javax.inject.Inject;
@@ -14,15 +14,17 @@ import net.runelite.client.plugins.PluginDescriptor;
 
 @Slf4j
 @PluginDescriptor(
-	name = "Example"
+		name = "Where Was I?",
+		description = "Remember where you left off — by Rusty Medic Labs",
+		tags = {"notes", "journal", "reminder", "location", "rml"}
 )
-public class ExamplePlugin extends Plugin
+public class WhereWasIPlugin extends Plugin
 {
 	@Inject
 	private Client client;
 
 	@Inject
-	private ExampleConfig config;
+	private WhereWasIConfig config;
 
 	@Override
 	protected void startUp() throws Exception
@@ -46,8 +48,8 @@ public class ExamplePlugin extends Plugin
 	}
 
 	@Provides
-	ExampleConfig provideConfig(ConfigManager configManager)
+	WhereWasIConfig provideConfig(ConfigManager configManager)
 	{
-		return configManager.getConfig(ExampleConfig.class);
+		return configManager.getConfig(WhereWasIConfig.class);
 	}
 }
