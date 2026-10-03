@@ -74,6 +74,7 @@ public class WhereWasIPlugin extends Plugin
 	private int terrainHeight;
 	private int terrainPlane = -1;
 	private boolean terrainDirty = true;
+	private long terrainRetryAfter;
 	private WorldMapPoint savedMapPoint;
 	private WorldPoint pendingMapTarget;
 	private long mapRequestUntil;
@@ -214,7 +215,8 @@ public class WhereWasIPlugin extends Plugin
 		currentVisit = new LastVisit(location.getX(), location.getY(), location.getPlane(),
 			client.getWorld(), System.currentTimeMillis());
 		EntranceTracker.Entry entrance = entrances.update(location);
-		if (terrainDirty || terrainPlane != location.getPlane())
+		if (terrainDirty || terrainPlane != location.getPlane()
+			|| (terrain == null && System.currentTimeMillis() >= terrainRetryAfter))
 		{
 			try
 			{
@@ -227,6 +229,7 @@ public class WhereWasIPlugin extends Plugin
 			catch (RuntimeException error)
 			{
 				terrain = null;
+				terrainRetryAfter = System.currentTimeMillis() + 5_000;
 				log.debug("Could not capture Where Was I terrain", error);
 				mapStatus("Terrain preview couldn't be captured. Check the RuneLite log.");
 			}
