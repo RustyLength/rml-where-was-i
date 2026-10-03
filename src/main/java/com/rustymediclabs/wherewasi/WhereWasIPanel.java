@@ -10,6 +10,7 @@ import java.awt.Insets;
 import java.awt.Graphics2D;
 import java.awt.RenderingHints;
 import java.awt.image.BufferedImage;
+import java.awt.geom.Path2D;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
@@ -63,7 +64,6 @@ final class WhereWasIPanel extends PluginPanel
 		heading.setBackground(STONE);
 		JPanel titles = new JPanel(new BorderLayout(0, 4));
 		titles.setBackground(STONE);
-		titles.add(label("RUSTY MEDIC LABS", 10), BorderLayout.NORTH);
 		titles.add(label("Where Was I?", 19), BorderLayout.CENTER);
 		heading.add(titles, BorderLayout.CENTER);
 		heading.add(new JLabel(new ImageIcon(createIcon())), BorderLayout.EAST);
@@ -118,6 +118,13 @@ final class WhereWasIPanel extends PluginPanel
 		help.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 11));
 		help.setText("A reminder for your next adventure. Notes save as you type; your location saves when you log out.");
 		addRow(help, 4);
+		JTextArea credit = textArea(1);
+		credit.setEditable(false);
+		credit.setBackground(STONE);
+		credit.setForeground(new Color(151, 137, 115));
+		credit.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 10));
+		credit.setText("Designed by Rusty Medic Labs");
+		addRow(credit, 5);
 		note.getDocument().addDocumentListener(new DocumentListener()
 		{
 			@Override public void insertUpdate(DocumentEvent event) { changed(); }
@@ -259,14 +266,52 @@ final class WhereWasIPanel extends PluginPanel
 		try
 		{
 			graphics.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-			graphics.setColor(STONE);
-			graphics.fillRoundRect(1, 1, 22, 22, 5, 5);
+			graphics.setColor(new Color(26, 24, 21));
+			graphics.fillRoundRect(0, 0, 24, 24, 5, 5);
+			Path2D map = new Path2D.Double();
+			map.moveTo(2, 5);
+			map.lineTo(8, 3);
+			map.lineTo(15, 6);
+			map.lineTo(22, 3);
+			map.lineTo(22, 19);
+			map.lineTo(15, 22);
+			map.lineTo(8, 19);
+			map.lineTo(2, 21);
+			map.closePath();
+			graphics.setColor(new Color(104, 83, 47));
+			graphics.fill(map);
 			graphics.setColor(GOLD);
-			graphics.drawRoundRect(1, 1, 21, 21, 5, 5);
-			graphics.setFont(new Font(Font.SERIF, Font.BOLD, 22));
-			graphics.drawString("?", 6, 20);
+			graphics.draw(map);
+			graphics.drawLine(8, 4, 8, 18);
+			graphics.drawLine(15, 7, 15, 20);
+			graphics.drawImage(createMapPin(), 6, 1, 13, 19, null);
 		}
 		finally { graphics.dispose(); }
 		return icon;
+	}
+
+	static BufferedImage createMapPin()
+	{
+		BufferedImage image = new BufferedImage(24, 32, BufferedImage.TYPE_INT_ARGB);
+		Graphics2D graphics = image.createGraphics();
+		try
+		{
+			graphics.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+			Path2D pin = new Path2D.Double();
+			pin.moveTo(12, 30);
+			pin.curveTo(9, 25, 2, 16, 2, 11);
+			pin.curveTo(2, -2, 22, -2, 22, 11);
+			pin.curveTo(22, 16, 15, 25, 12, 30);
+			pin.closePath();
+			graphics.setColor(GOLD);
+			graphics.fill(pin);
+			graphics.setColor(new Color(45, 34, 19));
+			graphics.draw(pin);
+			graphics.fillOval(7, 6, 10, 10);
+			graphics.setColor(new Color(255, 229, 167));
+			graphics.drawArc(4, 3, 15, 15, 40, 100);
+		}
+		finally { graphics.dispose(); }
+		return image;
 	}
 }

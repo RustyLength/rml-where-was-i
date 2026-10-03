@@ -18,9 +18,13 @@ import net.runelite.api.Client;
 import net.runelite.api.GameState;
 import net.runelite.api.Player;
 import net.runelite.api.SpritePixels;
+import net.runelite.api.WidgetNode;
+import net.runelite.api.Constants;
+import net.runelite.api.coords.LocalPoint;
 import net.runelite.api.coords.WorldPoint;
 import net.runelite.api.events.GameStateChanged;
 import net.runelite.api.events.GameTick;
+import net.runelite.api.events.ClientTick;
 import net.runelite.api.gameval.InterfaceID;
 import net.runelite.api.widgets.Widget;
 import net.runelite.api.worldmap.WorldMap;
@@ -95,7 +99,7 @@ public class WhereWasIPlugin extends Plugin
 				configManager.setConfiguration(WhereWasIConfig.GROUP, profile, NOTE_KEY, note),
 				(profile, visit, entrance) -> clientThread.invoke(() -> openMap(profile, visit, entrance)));
 			navigation = NavigationButton.builder()
-				.tooltip("Where Was I? · Rusty Medic Labs")
+				.tooltip("Where Was I?")
 				.icon(WhereWasIPanel.createIcon())
 				.priority(8).panel(panel).build();
 			clientToolbar.addNavigation(navigation);
@@ -126,6 +130,12 @@ public class WhereWasIPlugin extends Plugin
 	public void onGameTick(GameTick event)
 	{
 		captureVisit();
+	}
+
+	@Subscribe
+	public void onClientTick(ClientTick event)
+	{
+		// A map can open between server ticks; follow the local UI lifecycle.
 		centrePendingMap();
 	}
 
@@ -196,7 +206,7 @@ public class WhereWasIPlugin extends Plugin
 			if (config.welcomeMessage())
 			{
 				client.addChatMessage(ChatMessageType.GAMEMESSAGE, "",
-					"Where Was I? Your next steps and previous location are in the RML sidebar.", null);
+					"Where Was I? Open the sidebar to view your next steps and previous location.", null);
 			}
 		}
 		WorldPoint location = WorldPoint.fromLocalInstance(client, player.getLocalLocation());
@@ -206,15 +216,22 @@ public class WhereWasIPlugin extends Plugin
 		EntranceTracker.Entry entrance = entrances.update(location);
 		if (terrainDirty || terrainPlane != location.getPlane())
 		{
-			SpritePixels map = client.drawInstanceMap(location.getPlane());
-			if (map != null)
+			try
 			{
+				SpritePixels map = client.drawInstanceMap(location.getPlane());
+				if (map == null || map.getPixels() == null) { throw new IllegalStateException("Terrain sprite unavailable"); }
 				terrain = map.getPixels().clone();
 				terrainWidth = map.getWidth();
 				terrainHeight = map.getHeight();
-				terrainPlane = location.getPlane();
-				terrainDirty = false;
 			}
+			catch (RuntimeException error)
+			{
+				terrain = null;
+				log.debug("Could not capture Where Was I terrain", error);
+				mapStatus("Terrain preview couldn't be captured. Check the RuneLite log.");
+			}
+			terrainPlane = location.getPlane();
+			terrainDirty = false;
 		}
 		currentMap = terrain == null ? null : new CurrentMap(currentVisit, entrance, terrain,
 			terrainWidth, terrainHeight, player.getLocalLocation().getSceneX(), player.getLocalLocation().getSceneY());
@@ -268,7 +285,11 @@ public class WhereWasIPlugin extends Plugin
 				temporary.moveTo(file, StandardCopyOption.REPLACE_EXISTING);
 			}
 		}
-		catch (IOException | RuntimeException error) { log.debug("Could not save RML map preview", error); }
+		catch (IOException | RuntimeException error)
+		{
+			log.debug("Could not save Where Was I map preview", error);
+			previewStatus(profile, "Terrain preview couldn't be saved. Check the RuneLite log.");
+		}
 	}
 
 	private void loadMap(String profile, LastVisit previous, WhereWasIPanel target, long accountSession)
@@ -277,11 +298,19 @@ public class WhereWasIPlugin extends Plugin
 		try
 		{
 			Filepath file = mapFile(profile);
-			if (!file.exists() || file.size() > 256_000) { return; }
+			if (!file.exists())
+			{
+				previewStatus(profile, "No terrain preview saved yet. Log out and back in after visiting a location.");
+				rebuildPreview(profile, previous, target, accountSession);
+				return;
+			}
+			if (file.size() > 256_000) { throw new IOException("Saved preview exceeds size limit"); }
 			MapSnapshot snapshot;
 			try (InputStream input = file.openInputStream()) { snapshot = MapSnapshot.read(input); }
 			if (snapshot.visit.x != previous.x || snapshot.visit.y != previous.y || snapshot.visit.plane != previous.plane)
 			{
+				previewStatus(profile, "The terrain preview belongs to an earlier checkpoint. A new preview will be saved this visit.");
+				rebuildPreview(profile, previous, target, accountSession);
 				return; // Never put a marker over terrain saved at a different location.
 			}
 			clientThread.invoke(() ->
@@ -296,15 +325,47 @@ public class WhereWasIPlugin extends Plugin
 				});
 			});
 		}
-		catch (IOException | RuntimeException error) { log.debug("Could not load RML map preview", error); }
+		catch (IOException | RuntimeException error)
+		{
+			log.debug("Could not load Where Was I map preview", error);
+			previewStatus(profile, "Terrain preview couldn't be loaded. Check the RuneLite log.");
+			rebuildPreview(profile, previous, target, accountSession);
+		}
+	}
+
+	private void rebuildPreview(String profile, LastVisit previous, WhereWasIPanel target, long accountSession)
+	{
+		clientThread.invoke(() ->
+		{
+			if (!running || session != accountSession || panel != target || !profile.equals(activeProfile)
+				|| client.getGameState() != GameState.LOGGED_IN || client.isInInstancedRegion()
+				|| terrain == null || terrainPlane != previous.plane) { return; }
+			LocalPoint point = LocalPoint.fromWorld(client, new WorldPoint(previous.x, previous.y, previous.plane));
+			if (point == null || point.getSceneX() < 0 || point.getSceneY() < 0
+				|| point.getSceneX() >= Constants.SCENE_SIZE || point.getSceneY() >= Constants.SCENE_SIZE) { return; }
+			// Initial installs can rebuild the saved tile only while its real terrain is loaded.
+			// Do not invent a preview for another region or an instance.
+			MapSnapshot snapshot = new MapSnapshot(previous, null,
+				MapSnapshot.crop(terrain, terrainWidth, terrainHeight, point.getSceneX(), point.getSceneY()));
+			setMapPoint(previous, null);
+			SwingUtilities.invokeLater(() ->
+			{
+				if (running && panel == target && session == accountSession)
+				{
+					target.showMap(profile, snapshot);
+					target.mapStatus(profile, "Preview rebuilt from this area's terrain. Click to open the map.");
+				}
+			});
+		});
 	}
 
 	private void setMapPoint(LastVisit visit, EntranceTracker.Entry entrance)
 	{
 		clearMapPoint();
-		savedMapPoint = new WorldMapPoint(mapTarget(visit, entrance), WhereWasIPanel.createIcon());
+		savedMapPoint = new WorldMapPoint(mapTarget(visit, entrance), WhereWasIPanel.createMapPin());
 		savedMapPoint.setName(entrance == null ? "Where Was I? Saved location" : "Where Was I? " + entrance.name);
 		savedMapPoint.setTooltip(savedMapPoint.getName());
+		savedMapPoint.setImagePoint(new net.runelite.api.Point(12, 30));
 		savedMapPoint.setJumpOnClick(true);
 		mapPoints.add(savedMapPoint);
 	}
@@ -326,11 +387,15 @@ public class WhereWasIPlugin extends Plugin
 		setMapPoint(visit, entrance);
 		pendingMapTarget = mapTarget(visit, entrance);
 		mapRequestUntil = System.currentTimeMillis() + 10_000;
-		Widget map = client.getWidget(InterfaceID.Worldmap.MAP_CONTAINER);
-		if (map == null || map.isHidden())
+		if (!isMapOpen())
 		{
-			Widget globe = client.getWidget(InterfaceID.Orbs.WORLDMAP);
-			if (globe != null && !globe.isHidden() && globe.getOnOpListener() != null)
+			// The orb container owns the menu listener; WORLDMAP is its graphic.
+			Widget globe = client.getWidget(InterfaceID.Orbs.ORB_WORLDMAP);
+			if (globe == null || globe.getOnOpListener() == null)
+			{
+				globe = client.getWidget(InterfaceID.Orbs.WORLDMAP);
+			}
+			if (globe != null && globe.getOnOpListener() != null)
 			{
 				// Run the globe's local UI listener. No mouse/key injection or server action.
 				client.createScriptEventBuilder(globe.getOnOpListener()).setSource(globe).setOp(1).build().run();
@@ -344,12 +409,12 @@ public class WhereWasIPlugin extends Plugin
 		if (pendingMapTarget == null) { return; }
 		Widget widget = client.getWidget(InterfaceID.Worldmap.MAP_CONTAINER);
 		WorldMap map = client.getWorldMap();
-		if (widget != null && !widget.isHidden() && map != null && map.getWorldMapRenderer() != null
-			&& map.getWorldMapRenderer().isLoaded() && map.getWorldMapData() != null)
+		// Check the attached interface, rather than a hidden flag on its cached graphic.
+		if (isMapOpen() && widget != null && map != null && map.getWorldMapData() != null)
 		{
 			boolean onMap = map.getWorldMapData().surfaceContainsPosition(pendingMapTarget.getX(), pendingMapTarget.getY());
 			if (onMap) { map.setWorldMapPositionTarget(pendingMapTarget); }
-			mapStatus(onMap ? "Gold ? marks your saved location" : "This dungeon is not on this map. No recorded entrance yet.");
+			mapStatus(onMap ? "Gold pin marks your saved location" : "This dungeon is not on this map. No recorded entrance yet.");
 			pendingMapTarget = null;
 		}
 		else if (System.currentTimeMillis() > mapRequestUntil)
@@ -359,11 +424,34 @@ public class WhereWasIPlugin extends Plugin
 		}
 	}
 
+	private boolean isMapOpen()
+	{
+		if (client.getComponentTable() == null) { return false; }
+		for (WidgetNode node : client.getComponentTable())
+		{
+			if (node.getId() == InterfaceID.WORLDMAP) { return true; }
+		}
+		return false;
+	}
+
 	private void mapStatus(String text)
 	{
 		WhereWasIPanel target = panel;
 		String profile = activeProfile;
 		if (target != null) { SwingUtilities.invokeLater(() -> target.mapStatus(profile, text)); }
+	}
+
+	private void previewStatus(String profile, String text)
+	{
+		WhereWasIPanel target = panel;
+		long accountSession = session;
+		if (target != null)
+		{
+			SwingUtilities.invokeLater(() ->
+			{
+				if (running && panel == target && session == accountSession) { target.mapStatus(profile, text); }
+			});
+		}
 	}
 
 	private static final class CurrentMap

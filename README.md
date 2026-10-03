@@ -2,11 +2,11 @@
 
 An account-specific reminder sidebar for RuneLite. This first development version provides:
 
-- A gold question-mark sidebar button and RML branding.
+- A folded-map sidebar badge for Where Was I?, with a small Rusty Medic Labs designer credit in the footer.
 - A next-steps note that saves as you type, separately for each RuneScape profile.
 - The previous saved tile coordinates, floor, world and time.
 - A saved terrain preview with a gold location dot; click to open and centre the world map.
-- An RML question-mark marker on the world map.
+- A gold pin on the world map, anchored at the saved tile.
 - A location checkpoint every 30 seconds and on logout, client close or plugin disable.
 - An optional login message pointing you to the sidebar.
 
@@ -18,7 +18,7 @@ Use Java 11 and run `./gradlew run` (`.\gradlew.bat run` on Windows). Jagex-acco
 
 ## Manual acceptance check
 
-1. Log in, enable **Where Was I?**, and open the gold **?** sidebar button.
+1. Log in, enable **Where Was I?**, and open its folded-map sidebar button.
 2. Type a note, log out and back in. Confirm the note, previous location, world and time.
 3. Walk to another location, then close RuneLite normally. Relaunch and verify the last location.
 4. Switch accounts; verify each has its own note and that the login screen disables editing.
@@ -33,6 +33,8 @@ Use Java 11 and run `./gradlew run` (`.\gradlew.bat run` on Windows). Jagex-acco
 The approved OSRS character artwork, inventory/equipment snapshots and session history are still planned.
 
 Terrain previews are stored locally in RuneLite's plugin data directory using Filepath, separately for each account. File operations and PNG encoding run off the client thread. Terrain is rendered once after a scene load or floor change, rather than scanned every tick. The image and its coordinates are stored together. The sidebar remains fixed to the previous visit during the current session.
+
+If a preview is missing on an initial install, it can be rebuilt for the saved tile when that tile is in the currently loaded ordinary scene. Other regions and instances are not guessed. Capture, storage and loading failures show a message in the sidebar and diagnostic details in the RuneLite debug log.
 
 Recorded dungeon entries initially support Brimhaven north/south, Taverley, Lumbridge Swamp Caves, Edgeville main/shed and Catacombs of Kourend. The plugin must observe you walking through an entrance; logging in underground or teleporting there does not guess an entrance. The preview shows the actual dungeon tile; clicking targets the recorded surface entrance. Unsupported dungeon coordinates may not be present on the world map.
 
