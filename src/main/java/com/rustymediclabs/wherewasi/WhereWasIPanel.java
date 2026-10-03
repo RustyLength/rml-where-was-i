@@ -3,6 +3,10 @@ package com.rustymediclabs.wherewasi;
 import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.Font;
+import java.awt.Dimension;
+import java.awt.GridBagConstraints;
+import java.awt.GridBagLayout;
+import java.awt.Insets;
 import java.awt.Graphics2D;
 import java.awt.RenderingHints;
 import java.awt.image.BufferedImage;
@@ -11,7 +15,7 @@ import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.function.BiConsumer;
 import javax.swing.BorderFactory;
-import javax.swing.BoxLayout;
+import javax.swing.ImageIcon;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.JScrollPane;
@@ -37,26 +41,50 @@ final class WhereWasIPanel extends PluginPanel
 	WhereWasIPanel(BiConsumer<String, String> saveNote)
 	{
 		this.saveNote = saveNote;
-		setLayout(new BoxLayout(this, BoxLayout.Y_AXIS));
+		setLayout(new GridBagLayout());
 		setBackground(STONE);
-		setBorder(BorderFactory.createEmptyBorder(14, 10, 14, 10));
-		add(label("RUSTY MEDIC LABS", 11));
-		add(label("Where Was I?", 23));
+		setBorder(BorderFactory.createEmptyBorder(12, 10, 14, 10));
+		getScrollPane().setBorder(BorderFactory.createEmptyBorder());
+		getScrollPane().getViewport().setBackground(STONE);
+
+		JPanel heading = new JPanel(new BorderLayout(10, 0));
+		heading.setBackground(STONE);
+		JPanel titles = new JPanel(new BorderLayout(0, 4));
+		titles.setBackground(STONE);
+		titles.add(label("RUSTY MEDIC LABS", 10), BorderLayout.NORTH);
+		titles.add(label("Where Was I?", 19), BorderLayout.CENTER);
+		heading.add(titles, BorderLayout.CENTER);
+		heading.add(new JLabel(new ImageIcon(createIcon())), BorderLayout.EAST);
+		heading.setBorder(BorderFactory.createCompoundBorder(
+			BorderFactory.createMatteBorder(0, 0, 1, 0, new Color(101, 80, 50)),
+			BorderFactory.createEmptyBorder(0, 0, 12, 0)));
+		addRow(heading, 0);
+
 		account.setEditable(false);
-		add(section("ACCOUNT", account));
+		account.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 14));
+		account.setForeground(GOLD);
+		addRow(section("YOUR CHARACTER", account), 1);
 		previous.setEditable(false);
-		add(section("PREVIOUS VISIT", previous));
+		addRow(section("LAST TIME YOU WERE HERE", previous), 2);
 		JScrollPane editor = new JScrollPane(note);
 		editor.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
+		editor.setPreferredSize(new Dimension(0, 170));
 		editor.setBorder(BorderFactory.createLineBorder(new Color(101, 80, 50)));
-		add(section("MY NEXT STEPS", editor));
+		editor.getViewport().setBackground(new Color(32, 29, 25));
+		JPanel notes = new JPanel(new BorderLayout(0, 8));
+		notes.setOpaque(false);
+		notes.add(editor, BorderLayout.CENTER);
 		status.setForeground(GOLD);
-		status.setFont(status.getFont().deriveFont(11f));
-		add(section("", status));
+		status.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 11));
+		notes.add(status, BorderLayout.SOUTH);
+		addRow(section("MY NEXT STEPS", notes), 3);
 		JTextArea help = textArea(3);
 		help.setEditable(false);
-		help.setText("Notes save as you type. Location saves every 30 seconds and when you log out.");
-		add(help);
+		help.setBackground(STONE);
+		help.setForeground(new Color(177, 163, 141));
+		help.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 11));
+		help.setText("A reminder for your next adventure. Notes save as you type; your location saves when you log out.");
+		addRow(help, 4);
 		note.getDocument().addDocumentListener(new DocumentListener()
 		{
 			@Override public void insertUpdate(DocumentEvent event) { changed(); }
@@ -64,6 +92,18 @@ final class WhereWasIPanel extends PluginPanel
 			@Override public void changedUpdate(DocumentEvent event) { changed(); }
 		});
 		showLoggedOut();
+	}
+
+	private void addRow(java.awt.Component component, int row)
+	{
+		GridBagConstraints constraints = new GridBagConstraints();
+		constraints.gridx = 0;
+		constraints.gridy = row;
+		constraints.weightx = 1;
+		constraints.fill = GridBagConstraints.HORIZONTAL;
+		constraints.anchor = GridBagConstraints.NORTHWEST;
+		constraints.insets = new Insets(row == 0 ? 0 : 12, 0, 0, 0);
+		add(component, constraints);
 	}
 
 	private void changed()
@@ -84,8 +124,8 @@ final class WhereWasIPanel extends PluginPanel
 		note.setCaretPosition(0);
 		note.setEnabled(true);
 		previous.setText(visit == null ? "No previous visit yet.\nYour first visit will be saved automatically."
-			: "Tile " + visit.x + ", " + visit.y + " · Floor " + visit.plane
-			+ "\nWorld " + visit.world + "\n" + TIME.format(Instant.ofEpochMilli(visit.savedAt)));
+			: "World " + visit.world + " · Floor " + visit.plane
+			+ "\nTile " + visit.x + ", " + visit.y + "\n" + TIME.format(Instant.ofEpochMilli(visit.savedAt)));
 		status.setText("Notes ready");
 		loading = false;
 		revalidate();
@@ -106,7 +146,8 @@ final class WhereWasIPanel extends PluginPanel
 
 	private static JTextArea textArea(int rows)
 	{
-		JTextArea area = new JTextArea(rows, 16);
+		JTextArea area = new JTextArea(rows, 0);
+		area.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 12));
 		area.setLineWrap(true);
 		area.setWrapStyleWord(true);
 		area.setBackground(new Color(32, 29, 25));
@@ -128,8 +169,10 @@ final class WhereWasIPanel extends PluginPanel
 	private static JPanel section(String title, java.awt.Component content)
 	{
 		JPanel section = new JPanel(new BorderLayout(0, 7));
-		section.setBackground(STONE);
-		section.setBorder(BorderFactory.createEmptyBorder(15, 0, 0, 0));
+		section.setBackground(new Color(32, 29, 25));
+		section.setBorder(BorderFactory.createCompoundBorder(
+			BorderFactory.createLineBorder(new Color(76, 61, 43)),
+			BorderFactory.createEmptyBorder(10, 9, 10, 9)));
 		section.add(label(title, 11), BorderLayout.NORTH);
 		section.add(content, BorderLayout.CENTER);
 		section.setAlignmentX(LEFT_ALIGNMENT);
