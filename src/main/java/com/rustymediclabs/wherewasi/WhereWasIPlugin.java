@@ -22,7 +22,7 @@ import net.runelite.client.ui.overlay.OverlayManager;
 
 @PluginDescriptor(
 	name = "Where Was I?",
-	internalName = "rml-where-was-i",
+	internalName = "where-was-i",
 	description = "Pick up where you left off with an account-specific adventure journal",
 	tags = {"notes", "journal", "reminder", "goals", "rml"}
 )
