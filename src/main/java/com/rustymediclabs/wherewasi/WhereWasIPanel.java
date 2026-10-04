@@ -4,9 +4,6 @@ import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.Font;
 import java.awt.Dimension;
-import java.awt.GridBagConstraints;
-import java.awt.GridBagLayout;
-import java.awt.Insets;
 import java.awt.Graphics2D;
 import java.awt.RenderingHints;
 import java.awt.image.BufferedImage;
@@ -56,7 +53,7 @@ final class WhereWasIPanel extends PluginPanel
 	WhereWasIPanel(JournalWriter writer)
 	{
 		this.writer = writer;
-		setLayout(new GridBagLayout());
+		setLayout(new BoxLayout(this, BoxLayout.Y_AXIS));
 		setBackground(STONE);
 		setBorder(BorderFactory.createEmptyBorder(12, 10, 14, 10));
 		getScrollPane().setBorder(BorderFactory.createEmptyBorder());
@@ -104,6 +101,7 @@ final class WhereWasIPanel extends PluginPanel
 		JPanel historyPanel = new JPanel(new BorderLayout(0, 8));
 		historyPanel.setOpaque(false);
 		historyText.setEditable(false);
+		historyScroll.setName("sessionHistoryScroll");
 		historyScroll.setVisible(false);
 		historyToggle.setName("sessionHistoryToggle");
 		historyToggle.setForeground(GOLD);
@@ -129,6 +127,7 @@ final class WhereWasIPanel extends PluginPanel
 		JScrollPane scroll = new JScrollPane(text);
 		scroll.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
 		scroll.setPreferredSize(new Dimension(0, height));
+		scroll.setMinimumSize(new Dimension(0, height));
 		scroll.setBorder(BorderFactory.createLineBorder(new Color(101, 80, 50)));
 		return scroll;
 	}
@@ -155,14 +154,27 @@ final class WhereWasIPanel extends PluginPanel
 
 	private void addRow(java.awt.Component component, int row)
 	{
-		GridBagConstraints constraints = new GridBagConstraints();
-		constraints.gridx = 0;
-		constraints.gridy = row;
-		constraints.weightx = 1;
-		constraints.fill = GridBagConstraints.HORIZONTAL;
-		constraints.anchor = GridBagConstraints.NORTHWEST;
-		constraints.insets = new Insets(row == 0 ? 0 : 10, 0, 0, 0);
-		add(component, constraints);
+		// Keep every section at its natural height. The outer RuneLite scroll pane
+		// scrolls the journal instead of GridBag switching all rows to minimum sizes.
+		JPanel wrapper = new JPanel(new BorderLayout())
+		{
+			@Override
+			public Dimension getMinimumSize()
+			{
+				return new Dimension(0, getPreferredSize().height);
+			}
+
+			@Override
+			public Dimension getMaximumSize()
+			{
+				return new Dimension(Integer.MAX_VALUE, getPreferredSize().height);
+			}
+		};
+		wrapper.setOpaque(false);
+		wrapper.setAlignmentX(LEFT_ALIGNMENT);
+		wrapper.setBorder(BorderFactory.createEmptyBorder(row == 0 ? 0 : 10, 0, 0, 0));
+		wrapper.add(component, BorderLayout.CENTER);
+		add(wrapper);
 	}
 
 	void showAccount(String profile, String name, String activityText, String stepsText,

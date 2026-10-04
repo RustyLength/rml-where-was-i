@@ -6,6 +6,8 @@ import java.util.ArrayList;
 import java.util.List;
 import javax.swing.JTextArea;
 import javax.swing.JCheckBox;
+import javax.swing.JButton;
+import javax.swing.JScrollPane;
 import javax.swing.SwingUtilities;
 import org.junit.Test;
 import static org.junit.Assert.*;
@@ -85,6 +87,53 @@ public class WhereWasIPanelTest
 			if (child instanceof Container)
 			{
 				JCheckBox found = findCheck((Container) child, id);
+				if (found != null) { return found; }
+			}
+		}
+		return null;
+	}
+
+	@Test
+	public void expandingHistoryKeepsEditorsAndHistoryReadableAtSidebarWidth() throws Exception
+	{
+		SwingUtilities.invokeAndWait(() ->
+		{
+			WhereWasIPanel panel = new WhereWasIPanel((profile, key, text) -> { });
+			panel.showAccount("iron", "BudgieFE", "WC Willows", "Get 40 WC\ntest plug in", "", null);
+			panel.showHistory(SessionHistory.decode("1|100;WOODCUTTING=1283\n2|200;"));
+			int collapsedHeight = panel.getPreferredSize().height;
+			JButton toggle = (JButton) findNamed(panel, "sessionHistoryToggle");
+			toggle.doClick();
+			assertTrue(panel.getPreferredSize().height >= collapsedHeight + 180);
+			// PluginPanel is laid out at its natural height inside RuneLite's scroll pane.
+			panel.setSize(225, panel.getPreferredSize().height);
+			layoutTree(panel);
+			JScrollPane history = (JScrollPane) findNamed(panel, "sessionHistoryScroll");
+			assertEquals(180, history.getHeight());
+			assertTrue(findEditor(panel, WhereWasIPlugin.ACTIVITY).getHeight() >= 40);
+			assertTrue(findCheck(panel, JournalChecklist.tasks("Get 40 WC").get(0).id).getHeight() > 0);
+			toggle.doClick();
+			assertFalse(history.isVisible());
+		});
+	}
+
+	private static void layoutTree(Container container)
+	{
+		container.doLayout();
+		for (Component child : container.getComponents())
+		{
+			if (child instanceof Container) { layoutTree((Container) child); }
+		}
+	}
+
+	private static Component findNamed(Container container, String name)
+	{
+		for (Component child : container.getComponents())
+		{
+			if (name.equals(child.getName())) { return child; }
+			if (child instanceof Container)
+			{
+				Component found = findNamed((Container) child, name);
 				if (found != null) { return found; }
 			}
 		}
